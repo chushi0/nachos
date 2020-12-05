@@ -4,6 +4,8 @@ import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
 
+import java.util.LinkedList;
+
 /**
  * A kernel that can support multiple user processes.
  */
@@ -23,6 +25,10 @@ public class UserKernel extends ThreadedKernel {
         super.initialize(args);
 
         console = new SynchConsole(Machine.console());
+        int numPhysPages = Machine.processor().getNumPhysPages();
+        for (int i = 0; i < numPhysPages; i++) {
+            freeMemoryPage.add(i);
+        }
 
         Machine.processor().setExceptionHandler(new Runnable() {
             public void run() {
@@ -89,7 +95,7 @@ public class UserKernel extends ThreadedKernel {
      * program in it. The name of the shell program it must run is returned by
      * <tt>Machine.getShellProgramName()</tt>.
      *
-     * @see    nachos.machine.Machine#getShellProgramName
+     * @see nachos.machine.Machine#getShellProgramName
      */
     public void run() {
         super.run();
@@ -116,4 +122,7 @@ public class UserKernel extends ThreadedKernel {
 
     // dummy variables to make javac smarter
     private static Coff dummy1 = null;
+
+    // 空闲内存的双向链表
+    public static final LinkedList<Integer> freeMemoryPage = new LinkedList<>();
 }

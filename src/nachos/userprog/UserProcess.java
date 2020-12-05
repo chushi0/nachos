@@ -2,7 +2,6 @@ package nachos.userprog;
 
 import nachos.machine.*;
 import nachos.threads.KThread;
-import nachos.threads.ThreadQueue;
 import nachos.threads.ThreadedKernel;
 
 import java.io.EOFException;
@@ -21,12 +20,6 @@ import java.util.HashMap;
  * @see nachos.network.NetProcess
  */
 public class UserProcess {
-
-    private static final boolean[] pagesUsed;
-
-    static {
-        pagesUsed = new boolean[Machine.processor().getNumPhysPages()];
-    }
 
     /**
      * Allocate a new process.
@@ -334,32 +327,16 @@ public class UserProcess {
 
         // load sections
         // 统计需要多少页
-        int count = stackPages + 1;
+        int vpc = stackPages + 1;
         for (int i = 0; i < coff.getNumSections(); i++) {
             CoffSection section = coff.getSection(i);
-            count += section.getLength();
+            vpc += section.getLength();
         }
-        pageTable = new TranslationEntry[count];
+        pageTable = new TranslationEntry[vpc];
 
-        boolean intStatus = Machine.interrupt().disable();
-        for (int phyPageIndex = 0, pageTableIndex = 0; phyPageIndex < pagesUsed.length && pageTableIndex < count; phyPageIndex++) {
-            if (!pagesUsed[phyPageIndex]) {
-                pagesUsed[phyPageIndex] = true;
-                pageTable[pageTableIndex] = new TranslationEntry(pageTableIndex, phyPageIndex, true, false, false, false);
-                pageTableIndex++;
-            }
+        if (!allocPageMemory(pageTable, 0, vpc)) {
+            return false;
         }
-        if (pageTable[count - 1] == null) {
-            for (TranslationEntry entry : pageTable) {
-                if (entry != null) {
-                    pagesUsed[entry.ppn] = false;
-                    entry.ppn = -1;
-                    entry.valid = false;
-                }
-            }
-        }
-        Machine.interrupt().restore(intStatus);
-        if (pageTable[count - 1] == null) return false;
 
         for (int s = 0; s < coff.getNumSections(); s++) {
             CoffSection section = coff.getSection(s);
@@ -379,6 +356,20 @@ public class UserProcess {
         return true;
     }
 
+    private boolean allocPageMemory(TranslationEntry[] pageTable, int offset, int count) {
+        Lib.assertTrue(offset + count < pageTable.length && count > 0);
+        boolean success = false;
+        boolean intStatus = Machine.interrupt().disable();
+        if (UserKernel.freeMemoryPage.size() >= count) {
+            success = true;
+            for (int i = offset, end = offset + count; i < end; i++) {
+                pageTable[i] = new TranslationEntry(i, UserKernel.freeMemoryPage.getFirst(), true, false, false, false);
+            }
+        }
+        Machine.interrupt().restore(intStatus);
+        return success;
+    }
+
     /**
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
@@ -387,7 +378,7 @@ public class UserProcess {
         // 释放内存资源
         for (TranslationEntry entry : pageTable) {
             if (entry != null && entry.valid && entry.ppn != -1) {
-                pagesUsed[entry.ppn] = false;
+                UserKernel.freeMemoryPage.add(entry.ppn);
                 entry.valid = false;
             }
         }
