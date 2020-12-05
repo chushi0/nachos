@@ -51,7 +51,7 @@ public class UserProcess {
         }
         if (pageTable[numPages - 1] == null) {
             for (TranslationEntry translationEntry : pageTable) {
-                if(translationEntry == null) break;
+                if (translationEntry == null) break;
                 pagesUsed[translationEntry.ppn] = false;
             }
             Machine.interrupt().restore(intStatus);
@@ -555,12 +555,15 @@ public class UserProcess {
             args[i] = readVirtualMemoryString(cp, 256);
             if (args[i] == null) return -1;
         }
-
-        UserProcess userProcess = newUserProcess();
-        userProcess.parentProcess = this;
-        if (userProcess.execute(file, args)) {
-            return userProcess.id;
-        } else {
+        try {
+            UserProcess userProcess = newUserProcess();
+            userProcess.parentProcess = this;
+            if (userProcess.execute(file, args)) {
+                return userProcess.id;
+            } else {
+                return -1;
+            }
+        } catch (OutOfMemoryException e) {
             return -1;
         }
     }
@@ -577,8 +580,9 @@ public class UserProcess {
         bytes[1] = (byte) ((exitCode >> 8) & 0xff);
         bytes[2] = (byte) ((exitCode >> 16) & 0xff);
         bytes[3] = (byte) ((exitCode >> 24) & 0xff);
-        if (writeVirtualMemory(exitAddr, bytes) == 4)
+        if (writeVirtualMemory(exitAddr, bytes) == 4) {
             return 1;
+        }
         return 0;
     }
 
