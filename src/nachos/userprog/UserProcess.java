@@ -137,14 +137,6 @@ public class UserProcess {
 
         byte[] memory = Machine.processor().getMemory();
 
-        // for now, just assume that virtual addresses equal physical addresses
-//        if (vaddr < 0 || vaddr >= memory.length)
-//            return 0;
-//
-//        int amount = Math.min(length, memory.length - vaddr);
-//        System.arraycopy(memory, vaddr, data, offset, amount);
-//
-//        return amount;
         int page = vaddr / Processor.pageSize;
         int start = vaddr % Processor.pageSize;
         // 不存在此页
@@ -195,15 +187,6 @@ public class UserProcess {
         Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
 
         byte[] memory = Machine.processor().getMemory();
-
-        // for now, just assume that virtual addresses equal physical addresses
-//        if (vaddr < 0 || vaddr >= memory.length)
-//            return 0;
-//
-//        int amount = Math.min(length, memory.length - vaddr);
-//        System.arraycopy(data, offset, memory, vaddr, amount);
-//
-//        return amount;
 
         // 找到 vaddr 对应的页
         int page = vaddr / Processor.pageSize;
@@ -679,57 +662,14 @@ public class UserProcess {
                 processor.advancePC();
                 break;
 
-//            case Processor.exceptionPageFault:
-//                if (handlePageFault(processor.readRegister(Processor.regBadVAddr))) {
-//                    Machine.processor().setPageTable(pageTable);
-//                    break;
-//                }
-
             default:
                 Lib.debug(dbgProcess, "Unexpected exception: " +
                         Processor.exceptionNames[cause]);
                 exitCode = cause;
                 error = true;
                 releaseProcessResource();
-//                Lib.assertNotReached("Unexpected exception");
         }
     }
-
-//    private boolean handlePageFault(int vaddr) {
-//        int vpn = vaddr / Processor.pageSize;
-//        int newPageSize = vpn + 1;
-//        if (newPageSize <= pageTable.length) {
-//            if (pageTable[vpn].valid) return false;
-//            boolean intStatus = Machine.interrupt().disable();
-//            int ppn = nextPhyPage();
-//            if (ppn != -1) {
-//                pagesUsed[ppn] = true;
-//            }
-//            Machine.interrupt().restore(intStatus);
-//            if (ppn == -1) return false;
-//            pageTable[vpn].valid = true;
-//            pageTable[vpn].ppn = ppn;
-//            pageTable[vpn].readOnly = false;
-//            return true;
-//        }
-//        boolean intStatus = Machine.interrupt().disable();
-//        int ppn = nextPhyPage();
-//        if (ppn != -1) {
-//            pagesUsed[ppn] = true;
-//        }
-//        Machine.interrupt().restore(intStatus);
-//        if (ppn == -1) return false;
-//        TranslationEntry[] newPageTable = new TranslationEntry[newPageSize];
-//        System.arraycopy(pageTable, 0, newPageTable, 0, pageTable.length);
-//        for (int i = pageTable.length; i < newPageSize; i++) {
-//            newPageTable[i] = new TranslationEntry(i, 0, false, false, false, false);
-//        }
-//        pageTable = newPageTable;
-//        pageTable[vpn].valid = true;
-//        pageTable[vpn].ppn = ppn;
-//        pageTable[vpn].readOnly = false;
-//        return true;
-//    }
 
     /**
      * The program being run by this process.
