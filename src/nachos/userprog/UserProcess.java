@@ -2,6 +2,7 @@ package nachos.userprog;
 
 import nachos.machine.*;
 import nachos.threads.KThread;
+import nachos.threads.ThreadQueue;
 import nachos.threads.ThreadedKernel;
 
 import java.io.EOFException;
@@ -393,6 +394,26 @@ public class UserProcess {
         Machine.interrupt().restore(intStatus);
     }
 
+    private void releaseProcessResource() {
+        Machine.interrupt().disable();
+        // 释放内存资源
+        unloadSections();
+        // 从表中移除
+        userProcessHashMap.remove(id);
+        // 清空直接子进程表
+        childProcessHashMap.clear();
+        // 关闭文件
+        for (int i = 0; i < openFiles.length; i++) {
+            if (openFiles[i] != null) {
+                openFiles[i].close();
+                openFiles[i] = null;
+            }
+        }
+
+        // 终止线程
+        KThread.finish();
+    }
+
     /**
      * Initialize the processor's registers in preparation for running the
      * program loaded into this process. Set the PC register to point at the
@@ -514,21 +535,20 @@ public class UserProcess {
     }
 
     private int handleExit(int status) {
-        if (id == 0) {
-//            System.err.println("Root process called exit()");
-            return handleHalt();
+        exitCode = status;
+        error = false;
+
+        // 如果这是最后一个进程了，停机
+        if (userProcessHashMap.size() == 1) {
+            Machine.halt();
         }
 
-        exitCode = status;
-
-        Machine.interrupt().disable();
-        unloadSections();
-
-        KThread.finish();
+        releaseProcessResource();
         return 0;
     }
 
     private int handleExec(int fileAddr, int argc, int argvAddr) {
+        // 参数处理
         String file = readVirtualMemoryString(fileAddr, 256);
         if (file == null) return -1;
         String[] args = new String[argc];
@@ -539,9 +559,12 @@ public class UserProcess {
             args[i] = readVirtualMemoryString(cp, 256);
             if (args[i] == null) return -1;
         }
+        // 创建进程
         UserProcess userProcess = newUserProcess();
         userProcess.parentProcess = this;
         if (userProcess.execute(file, args)) {
+            // 添加到子进程列表
+            childProcessHashMap.put(userProcess.id, userProcess);
             return userProcess.id;
         } else {
             return -1;
@@ -549,21 +572,30 @@ public class UserProcess {
     }
 
     private int handleJoin(int process, int exitAddr) {
-        UserProcess userProcess = userProcessHashMap.get(process);
+        // 从子进程列表中找到进程
+        UserProcess userProcess = childProcessHashMap.get(process);
         if (userProcess == null || userProcess.parentProcess != this) return -1;
+        // 等待进程执行
         boolean intStatus = Machine.interrupt().disable();
         userProcess.uThread.join();
         Machine.interrupt().restore(intStatus);
-        int exitCode = userProcess.exitCode;
-        byte[] bytes = new byte[4];
-        bytes[0] = (byte) (exitCode & 0xff);
-        bytes[1] = (byte) ((exitCode >> 8) & 0xff);
-        bytes[2] = (byte) ((exitCode >> 16) & 0xff);
-        bytes[3] = (byte) ((exitCode >> 24) & 0xff);
-        if (writeVirtualMemory(exitAddr, bytes) == 4) {
-            return 1;
+        if (exitAddr != 0) {
+            // 获取返回代码
+            int exitCode = userProcess.exitCode;
+            byte[] bytes = new byte[4];
+            bytes[0] = (byte) (exitCode & 0xff);
+            bytes[1] = (byte) ((exitCode >> 8) & 0xff);
+            bytes[2] = (byte) ((exitCode >> 16) & 0xff);
+            bytes[3] = (byte) ((exitCode >> 24) & 0xff);
+            // 内存写入失败的情况
+            if (writeVirtualMemory(exitAddr, bytes) != 4) {
+                return -1;
+            }
         }
-        return 0;
+        // 从子进程列表中移除
+        childProcessHashMap.remove(process);
+        // 返回
+        return userProcess.error ? 0 : 1;
     }
 
     private int handleCreate(int filepathAddr) {
@@ -665,7 +697,9 @@ public class UserProcess {
             default:
                 Lib.debug(dbgProcess, "Unexpected exception: " +
                         Processor.exceptionNames[cause]);
-                handleExit(-cause);
+                exitCode = cause;
+                error = true;
+                releaseProcessResource();
 //                Lib.assertNotReached("Unexpected exception");
         }
     }
@@ -729,21 +763,27 @@ public class UserProcess {
     private int argc, argv;
 
     // 打开文件列表
-    private OpenFile[] openFiles = new OpenFile[16];
+    private final OpenFile[] openFiles = new OpenFile[16];
 
     // 父进程
     private UserProcess parentProcess;
 
     // 进程 id
-    private final int id = globalId++;
+    private final int id = ++globalId;
+    // 全局进程 id
     private static int globalId = 0;
+    // 全局进程
     private static final HashMap<Integer, UserProcess> userProcessHashMap = new HashMap<>();
+    // 直接子进程
+    private final HashMap<Integer, UserProcess> childProcessHashMap = new HashMap<>();
 
     // 主线程
     private final UThread uThread = new UThread(this);
 
     // 退出代码
     private int exitCode = -1;
+    // 是否因异常退出
+    private boolean error;
 
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
