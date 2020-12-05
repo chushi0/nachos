@@ -357,13 +357,13 @@ public class UserProcess {
     }
 
     private boolean allocPageMemory(TranslationEntry[] pageTable, int offset, int count) {
-        Lib.assertTrue(offset + count < pageTable.length && count > 0);
+        Lib.assertTrue(offset + count <= pageTable.length && count > 0);
         boolean success = false;
         boolean intStatus = Machine.interrupt().disable();
         if (UserKernel.freeMemoryPage.size() >= count) {
             success = true;
             for (int i = offset, end = offset + count; i < end; i++) {
-                pageTable[i] = new TranslationEntry(i, UserKernel.freeMemoryPage.getFirst(), true, false, false, false);
+                pageTable[i] = new TranslationEntry(i, UserKernel.freeMemoryPage.removeFirst(), true, false, false, false);
             }
         }
         Machine.interrupt().restore(intStatus);
