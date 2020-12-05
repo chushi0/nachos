@@ -585,19 +585,25 @@ public class UserProcess {
     private int handleCreate(int filepathAddr) {
         String filepath = readVirtualMemoryString(filepathAddr, 256);
         if (filepath == null) return -1;
+        int index = nextOpenFileIndex();
+        if (index == -1) return -1;
         FileSystem fileSystem = Machine.stubFileSystem();
         OpenFile openFile = fileSystem.open(filepath, true);
         if (openFile == null) return -1;
-        return saveOpenFileList(openFile);
+        openFiles[index] = openFile;
+        return index;
     }
 
     private int handleOpen(int filepathAddr) {
         String filepath = readVirtualMemoryString(filepathAddr, 256);
         if (filepath == null) return -1;
+        int index = nextOpenFileIndex();
+        if (index == -1) return -1;
         FileSystem fileSystem = Machine.stubFileSystem();
         OpenFile openFile = fileSystem.open(filepath, false);
         if (openFile == null) return -1;
-        return saveOpenFileList(openFile);
+        openFiles[index] = openFile;
+        return index;
     }
 
     private int handleRead(int fd, int bufferAddr, int count) {
@@ -624,7 +630,7 @@ public class UserProcess {
     }
 
     private int handleClose(int fd) {
-        if (fd < 0 || fd >= 16) return -1;
+        if (fd < 0 || fd >= openFiles.length) return -1;
         OpenFile openFile = openFiles[fd];
         if (openFile == null) return -1;
         openFile.close();
@@ -638,11 +644,10 @@ public class UserProcess {
         return fileSystem.remove(str) ? 0 : -1;
     }
 
-    // 将文件描述符保存到打开文件列表
-    private int saveOpenFileList(OpenFile openFile) {
+    // 获取下一个可用的保存已打开文件的位置
+    private int nextOpenFileIndex() {
         for (int i = 0; i < openFiles.length; i++) {
             if (openFiles[i] == null) {
-                openFiles[i] = openFile;
                 return i;
             }
         }
