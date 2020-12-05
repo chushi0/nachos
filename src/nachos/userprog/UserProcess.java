@@ -1,10 +1,10 @@
 package nachos.userprog;
 
 import nachos.machine.*;
-import nachos.threads.*;
+import nachos.threads.KThread;
+import nachos.threads.ThreadedKernel;
 
 import java.io.EOFException;
-import java.util.Arrays;
 import java.util.HashMap;
 
 /**
@@ -21,16 +21,43 @@ import java.util.HashMap;
  */
 public class UserProcess {
 
-    private static int pageNum = 0;
+    private static final boolean[] pagesUsed;
+
+    static {
+        pagesUsed = new boolean[Machine.processor().getNumPhysPages()];
+    }
+
+//    private static int num;
 
     /**
      * Allocate a new process.
      */
     public UserProcess() {
-        int numPhysPages = Machine.processor().getNumPhysPages() / 10;
-        pageTable = new TranslationEntry[numPhysPages];
-        for (int i = 0; i < numPhysPages; i++)
-            pageTable[i] = new TranslationEntry(i, pageNum++, true, false, false, false);
+//        int numPhysPages = Machine.processor().getNumPhysPages();
+//        pageTable = new TranslationEntry[numPhysPages];
+//        for (int i = 0; i < numPhysPages; i++)
+//            pageTable[i] = new TranslationEntry(i, i, true, false, false, false);
+
+        int numPhysPages = Machine.processor().getNumPhysPages();
+        int numPages = 16;
+        pageTable = new TranslationEntry[numPages];
+        boolean intStatus = Machine.interrupt().disable();
+        for (int pubIndex = 0, pageIndex = 0; pageIndex < numPages && pubIndex < numPhysPages; pubIndex++) {
+            if (!pagesUsed[pubIndex]) {
+                pagesUsed[pubIndex] = true;
+                pageTable[pageIndex] = new TranslationEntry(pageIndex, pubIndex, true, false, false, false);
+                pageIndex++;
+            }
+        }
+        if (pageTable[numPages - 1] == null) {
+            for (TranslationEntry translationEntry : pageTable) {
+                if(translationEntry == null) break;
+                pagesUsed[translationEntry.ppn] = false;
+            }
+            Machine.interrupt().restore(intStatus);
+            throw new OutOfMemoryException();
+        }
+        Machine.interrupt().restore(intStatus);
 
         userProcessHashMap.put(id, this);
     }
@@ -318,13 +345,13 @@ public class UserProcess {
         this.argc = args.length;
         this.argv = entryOffset;
 
-        for (int i = 0; i < argv.length; i++) {
+        for (byte[] bytes : argv) {
             byte[] stringOffsetBytes = Lib.bytesFromInt(stringOffset);
             Lib.assertTrue(writeVirtualMemory(entryOffset, stringOffsetBytes) == 4);
             entryOffset += 4;
-            Lib.assertTrue(writeVirtualMemory(stringOffset, argv[i]) ==
-                    argv[i].length);
-            stringOffset += argv[i].length;
+            Lib.assertTrue(writeVirtualMemory(stringOffset, bytes) ==
+                    bytes.length);
+            stringOffset += bytes.length;
             Lib.assertTrue(writeVirtualMemory(stringOffset, new byte[]{0}) == 1);
             stringOffset += 1;
         }
@@ -506,6 +533,13 @@ public class UserProcess {
         }
 
         exitCode = status;
+
+        Machine.interrupt().disable();
+        // 释放内存资源
+        for (TranslationEntry translationEntry : pageTable) {
+            pagesUsed[translationEntry.ppn] = false;
+        }
+
         KThread.finish();
         return 0;
     }
@@ -686,4 +720,10 @@ public class UserProcess {
 
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
+
+    private static class OutOfMemoryException extends RuntimeException {
+        OutOfMemoryException() {
+            super("Unable to create process because of no enough memory");
+        }
+    }
 }
