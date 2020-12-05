@@ -139,17 +139,22 @@ public class UserProcess {
 
         int page = vaddr / Processor.pageSize;
         int start = vaddr % Processor.pageSize;
-        // 不存在此页
-        if (page >= pageTable.length) {
-            return 0;
-        }
 
-        int amount = Math.min(Processor.pageSize - start, length);
-        int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
-        System.arraycopy(memory, physicalStart, data, offset, amount);
+        int amount = 0;
+        int remain = length;
 
-        if (amount < length) {
-            amount += readVirtualMemory(vaddr + amount, data, offset + amount, length - amount);
+        while (remain > 0) {
+
+            if (page >= pageTable.length) break;
+
+            int count = Math.min(Processor.pageSize - start, remain);
+            int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
+            System.arraycopy(memory, physicalStart, data, offset, count);
+            amount += count;
+            remain -= count;
+
+            page++;
+            start = 0;
         }
 
         return amount;
@@ -188,20 +193,25 @@ public class UserProcess {
 
         byte[] memory = Machine.processor().getMemory();
 
-        // 找到 vaddr 对应的页
         int page = vaddr / Processor.pageSize;
         int start = vaddr % Processor.pageSize;
-        // 不存在此页
-        if (page >= pageTable.length) {
-            return 0;
-        }
 
-        int amount = Math.min(Processor.pageSize - start, length);
-        int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
-        System.arraycopy(data, offset, memory, physicalStart, amount);
+        int amount = 0;
+        int remain = length;
 
-        if (amount < length) {
-            amount += writeVirtualMemory(vaddr + amount, data, offset + amount, length - amount);
+        while (remain > 0) {
+
+            if (page >= pageTable.length) break;
+            if (pageTable[page].readOnly) break;
+
+            int count = Math.min(Processor.pageSize - start, remain);
+            int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
+            System.arraycopy(data, offset, memory, physicalStart, count);
+            amount += count;
+            remain -= count;
+
+            page++;
+            start = 0;
         }
 
         return amount;
