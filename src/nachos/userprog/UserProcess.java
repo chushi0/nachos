@@ -27,38 +27,10 @@ public class UserProcess {
         pagesUsed = new boolean[Machine.processor().getNumPhysPages()];
     }
 
-//    private static int num;
-
     /**
      * Allocate a new process.
      */
     public UserProcess() {
-//        int numPhysPages = Machine.processor().getNumPhysPages();
-//        pageTable = new TranslationEntry[numPhysPages];
-//        for (int i = 0; i < numPhysPages; i++)
-//            pageTable[i] = new TranslationEntry(i, i, true, false, false, false);
-
-        int numPhysPages = Machine.processor().getNumPhysPages();
-        int numPages = 16;
-        pageTable = new TranslationEntry[numPages];
-        boolean intStatus = Machine.interrupt().disable();
-        for (int pubIndex = 0, pageIndex = 0; pageIndex < numPages && pubIndex < numPhysPages; pubIndex++) {
-            if (!pagesUsed[pubIndex]) {
-                pagesUsed[pubIndex] = true;
-                pageTable[pageIndex] = new TranslationEntry(pageIndex, pubIndex, true, false, false, false);
-                pageIndex++;
-            }
-        }
-        if (pageTable[numPages - 1] == null) {
-            for (TranslationEntry translationEntry : pageTable) {
-                if (translationEntry == null) break;
-                pagesUsed[translationEntry.ppn] = false;
-            }
-            Machine.interrupt().restore(intStatus);
-            throw new OutOfMemoryException();
-        }
-        Machine.interrupt().restore(intStatus);
-
         userProcessHashMap.put(id, this);
     }
 
@@ -181,20 +153,13 @@ public class UserProcess {
 //        return amount;
         int page = vaddr / Processor.pageSize;
         int start = vaddr % Processor.pageSize;
-        TranslationEntry translationEntry = null;
-        for (TranslationEntry te : pageTable) {
-            if (te.vpn == page) {
-                translationEntry = te;
-                break;
-            }
-        }
         // 不存在此页
-        if (translationEntry == null) {
+        if (page >= pageTable.length) {
             return 0;
         }
 
         int amount = Math.min(Processor.pageSize - start, length);
-        int physicalStart = translationEntry.ppn * Processor.pageSize + start;
+        int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
         System.arraycopy(memory, physicalStart, data, offset, amount);
 
         if (amount < length) {
@@ -249,20 +214,13 @@ public class UserProcess {
         // 找到 vaddr 对应的页
         int page = vaddr / Processor.pageSize;
         int start = vaddr % Processor.pageSize;
-        TranslationEntry translationEntry = null;
-        for (TranslationEntry te : pageTable) {
-            if (te.vpn == page) {
-                translationEntry = te;
-                break;
-            }
-        }
         // 不存在此页
-        if (translationEntry == null) {
+        if (page >= pageTable.length) {
             return 0;
         }
 
         int amount = Math.min(Processor.pageSize - start, length);
-        int physicalStart = translationEntry.ppn * Processor.pageSize + start;
+        int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
         System.arraycopy(data, offset, memory, physicalStart, amount);
 
         if (amount < length) {
@@ -374,6 +332,34 @@ public class UserProcess {
         }
 
         // load sections
+        // 统计需要多少页
+        int count = stackPages + 1;
+        for (int i = 0; i < coff.getNumSections(); i++) {
+            CoffSection section = coff.getSection(i);
+            count += section.getLength();
+        }
+        pageTable = new TranslationEntry[count];
+
+        boolean intStatus = Machine.interrupt().disable();
+        for (int phyPageIndex = 0, pageTableIndex = 0; phyPageIndex < pagesUsed.length && pageTableIndex < count; phyPageIndex++) {
+            if (!pagesUsed[phyPageIndex]) {
+                pagesUsed[phyPageIndex] = true;
+                pageTable[pageTableIndex] = new TranslationEntry(pageTableIndex, phyPageIndex, true, false, false, false);
+                pageTableIndex++;
+            }
+        }
+        if (pageTable[count - 1] == null) {
+            for (TranslationEntry entry : pageTable) {
+                if (entry != null) {
+                    pagesUsed[entry.ppn] = false;
+                    entry.ppn = -1;
+                    entry.valid = false;
+                }
+            }
+        }
+        Machine.interrupt().restore(intStatus);
+        if (pageTable[count - 1] == null) return false;
+
         for (int s = 0; s < coff.getNumSections(); s++) {
             CoffSection section = coff.getSection(s);
 
@@ -383,17 +369,9 @@ public class UserProcess {
             for (int i = 0; i < section.getLength(); i++) {
                 int vpn = section.getFirstVPN() + i;
 
-                // for now, just assume virtual addresses=physical addresses
-//                section.loadPage(i, vpn);
-                boolean load = false;
-                for (TranslationEntry translationEntry : pageTable) {
-                    if (translationEntry.vpn == vpn) {
-                        section.loadPage(i, translationEntry.ppn);
-                        load = true;
-                        break;
-                    }
-                }
-                if (!load) return false;
+                pageTable[vpn].readOnly = section.isReadOnly();
+
+                section.loadPage(i, pageTable[vpn].ppn);
             }
         }
 
@@ -404,6 +382,15 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
+        boolean intStatus = Machine.interrupt().disable();
+        // 释放内存资源
+        for (TranslationEntry entry : pageTable) {
+            if (entry != null && entry.valid && entry.ppn != -1) {
+                pagesUsed[entry.ppn] = false;
+                entry.valid = false;
+            }
+        }
+        Machine.interrupt().restore(intStatus);
     }
 
     /**
@@ -528,17 +515,14 @@ public class UserProcess {
 
     private int handleExit(int status) {
         if (id == 0) {
-            System.err.println("Root process called exit()");
-            return -1;
+//            System.err.println("Root process called exit()");
+            return handleHalt();
         }
 
         exitCode = status;
 
         Machine.interrupt().disable();
-        // 释放内存资源
-        for (TranslationEntry translationEntry : pageTable) {
-            pagesUsed[translationEntry.ppn] = false;
-        }
+        unloadSections();
 
         KThread.finish();
         return 0;
@@ -555,15 +539,11 @@ public class UserProcess {
             args[i] = readVirtualMemoryString(cp, 256);
             if (args[i] == null) return -1;
         }
-        try {
-            UserProcess userProcess = newUserProcess();
-            userProcess.parentProcess = this;
-            if (userProcess.execute(file, args)) {
-                return userProcess.id;
-            } else {
-                return -1;
-            }
-        } catch (OutOfMemoryException e) {
+        UserProcess userProcess = newUserProcess();
+        userProcess.parentProcess = this;
+        if (userProcess.execute(file, args)) {
+            return userProcess.id;
+        } else {
             return -1;
         }
     }
@@ -676,12 +656,55 @@ public class UserProcess {
                 processor.advancePC();
                 break;
 
+//            case Processor.exceptionPageFault:
+//                if (handlePageFault(processor.readRegister(Processor.regBadVAddr))) {
+//                    Machine.processor().setPageTable(pageTable);
+//                    break;
+//                }
+
             default:
                 Lib.debug(dbgProcess, "Unexpected exception: " +
                         Processor.exceptionNames[cause]);
-                Lib.assertNotReached("Unexpected exception");
+                handleExit(-cause);
+//                Lib.assertNotReached("Unexpected exception");
         }
     }
+
+//    private boolean handlePageFault(int vaddr) {
+//        int vpn = vaddr / Processor.pageSize;
+//        int newPageSize = vpn + 1;
+//        if (newPageSize <= pageTable.length) {
+//            if (pageTable[vpn].valid) return false;
+//            boolean intStatus = Machine.interrupt().disable();
+//            int ppn = nextPhyPage();
+//            if (ppn != -1) {
+//                pagesUsed[ppn] = true;
+//            }
+//            Machine.interrupt().restore(intStatus);
+//            if (ppn == -1) return false;
+//            pageTable[vpn].valid = true;
+//            pageTable[vpn].ppn = ppn;
+//            pageTable[vpn].readOnly = false;
+//            return true;
+//        }
+//        boolean intStatus = Machine.interrupt().disable();
+//        int ppn = nextPhyPage();
+//        if (ppn != -1) {
+//            pagesUsed[ppn] = true;
+//        }
+//        Machine.interrupt().restore(intStatus);
+//        if (ppn == -1) return false;
+//        TranslationEntry[] newPageTable = new TranslationEntry[newPageSize];
+//        System.arraycopy(pageTable, 0, newPageTable, 0, pageTable.length);
+//        for (int i = pageTable.length; i < newPageSize; i++) {
+//            newPageTable[i] = new TranslationEntry(i, 0, false, false, false, false);
+//        }
+//        pageTable = newPageTable;
+//        pageTable[vpn].valid = true;
+//        pageTable[vpn].ppn = ppn;
+//        pageTable[vpn].readOnly = false;
+//        return true;
+//    }
 
     /**
      * The program being run by this process.
@@ -725,9 +748,4 @@ public class UserProcess {
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
 
-    private static class OutOfMemoryException extends RuntimeException {
-        OutOfMemoryException() {
-            super("Unable to create process because of no enough memory");
-        }
-    }
 }
