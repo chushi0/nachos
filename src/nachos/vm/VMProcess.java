@@ -76,6 +76,8 @@ public class VMProcess extends UserProcess {
                 lock.acquire();
                 Machine.interrupt().restore(intStatus);
                 section.loadPage(i, pageTable[vpn].ppn);
+                pageTable[vpn].used = true;
+                pageTable[vpn].dirty = true;
                 lock.release();
             }
         }
@@ -353,10 +355,12 @@ public class VMProcess extends UserProcess {
         Machine.interrupt().enable();
         VMKernel.vmFile.seek(vmp * Processor.pageSize);
         VMKernel.vmFile.read(memory, entry.ppn * Processor.pageSize, Processor.pageSize);
-        Machine.interrupt().restore(intStatus);
+        Machine.interrupt().disable();
         entry.valid = true;
         entry.used = false;
         entry.dirty = false;
+        VMKernel.invPage.put(pvpn, entry);
+        Machine.interrupt().restore(intStatus);
         lock.release();
     }
 
