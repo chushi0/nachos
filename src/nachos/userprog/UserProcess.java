@@ -394,6 +394,9 @@ public class UserProcess {
             }
         }
 
+        // 关闭可执行文件
+        coff.close();
+
         // 如果这是最后一个进程了，停机
         if (userProcessHashMap.size() == 0) {
             Machine.halt();
