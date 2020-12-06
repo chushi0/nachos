@@ -1,9 +1,6 @@
 package nachos.vm;
 
-import nachos.machine.Lib;
-import nachos.machine.Machine;
-import nachos.machine.Processor;
-import nachos.machine.TranslationEntry;
+import nachos.machine.*;
 import nachos.threads.Lock;
 import nachos.userprog.UserKernel;
 import nachos.userprog.UserProcess;
@@ -52,7 +49,44 @@ public class VMProcess extends UserProcess {
      * @return <tt>true</tt> if successful.
      */
     protected boolean loadSections() {
-        return super.loadSections();
+        if (numPages > Machine.processor().getNumPhysPages()) {
+            coff.close();
+            Lib.debug(dbgProcess, "\tinsufficient physical memory");
+            return false;
+        }
+
+        int vpc = stackPages + 1;
+        for (int i = 0; i < coff.getNumSections(); i++) {
+            CoffSection section = coff.getSection(i);
+            vpc += section.getLength();
+        }
+        pageTable = new TranslationEntry[vpc];
+
+        if (!allocPageMemory(pageTable, 0, vpc)) {
+            return false;
+        }
+
+        for (int s = 0; s < coff.getNumSections(); s++) {
+            CoffSection section = coff.getSection(s);
+
+            Lib.debug(dbgProcess, "\tinitializing " + section.getName()
+                    + " section (" + section.getLength() + " pages)");
+
+            for (int i = 0; i < section.getLength(); i++) {
+                int vpn = section.getFirstVPN() + i;
+
+                pageTable[vpn].readOnly = section.isReadOnly();
+
+                boolean intStatus = Machine.interrupt().disable();
+                if (!pageTable[vpn].valid) swapIn(vpn);
+                lock.acquire();
+                Machine.interrupt().restore(intStatus);
+                section.loadPage(i, pageTable[vpn].ppn);
+                lock.release();
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -135,12 +169,70 @@ public class VMProcess extends UserProcess {
 
     @Override
     public int writeVirtualMemory(int vaddr, byte[] data, int offset, int length) {
-        return super.writeVirtualMemory(vaddr, data, offset, length);
+        Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
+
+        byte[] memory = Machine.processor().getMemory();
+
+        int page = vaddr / Processor.pageSize;
+        int start = vaddr % Processor.pageSize;
+
+        int amount = 0;
+        int remain = length;
+
+        while (remain > 0) {
+
+            if (page >= pageTable.length) break;
+            if (pageTable[page].readOnly) break;
+
+            if (!pageTable[page].valid) swapIn(page);
+
+            int count = Math.min(Processor.pageSize - start, remain);
+            int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
+            System.arraycopy(data, offset, memory, physicalStart, count);
+            amount += count;
+            remain -= count;
+
+            pageTable[page].used = true;
+            pageTable[page].dirty = true;
+
+            page++;
+            start = 0;
+        }
+
+        return amount;
     }
 
     @Override
     public int readVirtualMemory(int vaddr, byte[] data, int offset, int length) {
-        return super.readVirtualMemory(vaddr, data, offset, length);
+        Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
+
+        byte[] memory = Machine.processor().getMemory();
+
+        int page = vaddr / Processor.pageSize;
+        int start = vaddr % Processor.pageSize;
+
+        int amount = 0;
+        int remain = length;
+
+        while (remain > 0) {
+
+            if (page >= pageTable.length) break;
+
+            if (!pageTable[page].valid) swapIn(page);
+
+            int count = Math.min(Processor.pageSize - start, remain);
+            int physicalStart = pageTable[page].ppn * Processor.pageSize + start;
+            System.arraycopy(memory, physicalStart, data, offset, count);
+            amount += count;
+            remain -= count;
+
+            pageTable[page].used = true;
+
+            page++;
+            start = 0;
+        }
+
+        return amount;
     }
 
     // 获取可用的内存物理页
@@ -236,12 +328,7 @@ public class VMProcess extends UserProcess {
         pvpn.vpn = vpn;
         TranslationEntry entry = pageTable[vpn];
         entry.ppn = availableMemory();
-        int vmp;
-        try {
-            vmp = VMKernel.vmMap.get(pvpn);
-        } catch (NullPointerException e) {
-            throw e;
-        }
+        int vmp = VMKernel.vmMap.get(pvpn);
         byte[] memory = Machine.processor().getMemory();
         lock.acquire();
         Machine.interrupt().enable();
