@@ -349,7 +349,7 @@ public class UserProcess {
         return true;
     }
 
-    private boolean allocPageMemory(TranslationEntry[] pageTable, int offset, int count) {
+    protected boolean allocPageMemory(TranslationEntry[] pageTable, int offset, int count) {
         Lib.assertTrue(offset + count <= pageTable.length && count > 0);
         boolean success = false;
         boolean intStatus = Machine.interrupt().disable();
@@ -367,6 +367,9 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
+    }
+
+    protected void freeMemory() {
         boolean intStatus = Machine.interrupt().disable();
         // 释放内存资源
         for (TranslationEntry entry : pageTable) {
@@ -381,7 +384,7 @@ public class UserProcess {
     private void releaseProcessResource() {
         Machine.interrupt().disable();
         // 释放内存资源
-        unloadSections();
+        freeMemory();
         // 从表中移除
         userProcessHashMap.remove(id);
         // 清空直接子进程表
@@ -715,7 +718,7 @@ public class UserProcess {
     private UserProcess parentProcess;
 
     // 进程 id
-    private final int id = ++globalId;
+    protected final int id = ++globalId;
     // 全局进程 id
     private static int globalId = 0;
     // 全局进程
