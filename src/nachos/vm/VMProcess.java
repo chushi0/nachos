@@ -49,12 +49,6 @@ public class VMProcess extends UserProcess {
      * @return <tt>true</tt> if successful.
      */
     protected boolean loadSections() {
-        if (numPages > Machine.processor().getNumPhysPages()) {
-            coff.close();
-            Lib.debug(dbgProcess, "\tinsufficient physical memory");
-            return false;
-        }
-
         int vpc = stackPages + 1;
         for (int i = 0; i < coff.getNumSections(); i++) {
             CoffSection section = coff.getSection(i);
