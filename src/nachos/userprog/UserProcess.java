@@ -397,9 +397,12 @@ public class UserProcess {
             }
         }
 
+        // 关闭可执行文件
+        coff.close();
+
         // 如果这是最后一个进程了，停机
         if (userProcessHashMap.size() == 0) {
-            Machine.halt();
+            Kernel.kernel.terminate();
         }
 
         // 终止线程
@@ -433,13 +436,12 @@ public class UserProcess {
      * Handle the halt() system call.
      */
     private int handleHalt() {
-        UserProcess process = UserKernel.currentProcess();
-        if (process.id != 0) {
-            System.err.println("Process which called halt() is not root process");
+        if (id != 0) {
+//            System.err.println("Process which called halt() is not root process");
             return -1;
         }
 
-        Machine.halt();
+        Kernel.kernel.terminate();
 
         Lib.assertNotReached("Machine.halt() did not halt machine!");
         return 0;
