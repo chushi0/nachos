@@ -458,7 +458,8 @@ public class UserProcess {
             syscallRead = 6,
             syscallWrite = 7,
             syscallClose = 8,
-            syscallUnlink = 9;
+            syscallUnlink = 9,
+            syscallSbrk = 13;
 
     /**
      * Handle a syscall exception. Called by <tt>handleException()</tt>. The
@@ -519,6 +520,9 @@ public class UserProcess {
 
             case syscallUnlink:
                 return handleUnlink(a0);
+
+            case syscallSbrk:
+                return handleSbrk(a0);
 
             default:
                 System.out.println("unknown syscall: " + syscall);
@@ -647,6 +651,31 @@ public class UserProcess {
         String str = readVirtualMemoryString(filepathAddr, 256);
         FileSystem fileSystem = Machine.stubFileSystem();
         return fileSystem.remove(str) ? 0 : -1;
+    }
+
+    private int handleSbrk(int sizeAddr) {
+        byte[] buf = new byte[4];
+        readVirtualMemory(sizeAddr, buf);
+        // 希望分配的内存大小
+        int hopeSize = (buf[0] & 0xff) | ((buf[1] & 0xff) << 8) | ((buf[2] & 0xff) << 16) | ((buf[3] & 0xff) << 24);
+        if (hopeSize <= 0) return 0;
+        // 页数
+        int pageSize = hopeSize / Processor.pageSize + 1;
+        int startVaddr = pageTable.length * Processor.pageSize;
+        TranslationEntry[] newPageTable = new TranslationEntry[pageTable.length + pageSize];
+        if (allocPageMemory(newPageTable, pageTable.length, pageSize)) {
+            System.arraycopy(pageTable, 0, newPageTable, 0, pageTable.length);
+            pageTable = newPageTable;
+            Machine.processor().setPageTable(newPageTable);
+            int size = pageSize * Processor.pageSize;
+            buf[0] = (byte) (size & 0xff);
+            buf[1] = (byte) ((size >> 8) & 0xff);
+            buf[2] = (byte) ((size >> 16) & 0xff);
+            buf[3] = (byte) ((size >> 24) & 0xff);
+            writeVirtualMemory(sizeAddr, buf);
+            return startVaddr;
+        }
+        return 0;
     }
 
     // 获取下一个可用的保存已打开文件的位置

@@ -34,4 +34,7 @@ int strncmp(const char *a, const char *b, int n);
 
 int atoi(const char *s);
 
+char* malloc(int size);
+void free(char* mem);
+
 #endif // STDLIB_H

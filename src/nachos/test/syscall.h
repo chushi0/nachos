@@ -12,19 +12,20 @@
 /**
  * System call codes, passed in $r0 to tell the kernel which system call to do.
  */
-#define	syscallHalt		0
-#define	syscallExit		1
-#define	syscallExec		2
-#define	syscallJoin		3
+#define	syscallHalt		    0
+#define	syscallExit		    1
+#define	syscallExec		    2
+#define	syscallJoin		    3
 #define	syscallCreate		4
-#define	syscallOpen		5
-#define	syscallRead		6
+#define	syscallOpen		    5
+#define	syscallRead		    6
 #define	syscallWrite		7
 #define	syscallClose		8
 #define	syscallUnlink		9
-#define syscallMmap		10
+#define syscallMmap		    10
 #define syscallConnect		11
 #define syscallAccept		12
+#define syscallSbrk         13
 
 /* Don't want the assembler to see C code, but start.s includes syscall.h. */
 #ifndef START_S
@@ -256,6 +257,19 @@ int connect(int host, int port);
  * occurred.
  */
 int accept(int port);
+
+/**
+ * 向系统申请内存
+ *
+ * 操作系统始终分配连续的逻辑内存，这些内存在物理内存上并不连续。
+ * 应用程序应当自己合理地分配内存使用
+ *
+ * 参数：
+ *      size - 应用程序希望得到的内存大小，实际申请的内存大小也会从这里返回
+ * 返回：
+ *      新的逻辑地址。如果申请失败，则返回 0
+ */
+char* sbrk(int* size);
 
 #endif /* START_S */
 

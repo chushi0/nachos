@@ -27,7 +27,7 @@ STDLIB_H = stdio.h stdlib.h ag.h
 STDLIB_C = stdio.c stdlib.c
 STDLIB_O = start.o stdio.o stdlib.o
 
-LIB = assert atoi printf readline stdio strncmp strcat strcmp strcpy strlen memcpy memset
+LIB = assert atoi printf readline stdio strncmp strcat strcmp strcpy strlen memcpy memset malloc
 NLIB = libnachos.a
 
 TARGETS = halt sh matmult sort echo cat cp mv rm test subtest #chat chatserver
