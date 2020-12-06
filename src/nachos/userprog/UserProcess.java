@@ -653,7 +653,7 @@ public class UserProcess {
         return fileSystem.remove(str) ? 0 : -1;
     }
 
-    private int handleSbrk(int sizeAddr) {
+    protected int handleSbrk(int sizeAddr) {
         byte[] buf = new byte[4];
         readVirtualMemory(sizeAddr, buf);
         // 希望分配的内存大小
