@@ -394,6 +394,11 @@ public class UserProcess {
             }
         }
 
+        // 如果这是最后一个进程了，停机
+        if (userProcessHashMap.size() == 0) {
+            Machine.halt();
+        }
+
         // 终止线程
         KThread.finish();
     }
@@ -521,11 +526,6 @@ public class UserProcess {
     private int handleExit(int status) {
         exitCode = status;
         error = false;
-
-        // 如果这是最后一个进程了，停机
-        if (userProcessHashMap.size() == 1) {
-            Machine.halt();
-        }
 
         releaseProcessResource();
         return 0;
