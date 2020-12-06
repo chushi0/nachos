@@ -67,3 +67,4 @@ name:				; \
 	SYSCALLSTUB(mmap, syscallMmap)
 	SYSCALLSTUB(connect, syscallConnect)
 	SYSCALLSTUB(accept, syscallAccept)
+	SYSCALLSTUB(sbrk, syscallSbrk)
