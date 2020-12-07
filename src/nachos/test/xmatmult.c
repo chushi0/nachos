@@ -1,12 +1,12 @@
 /* matmult.c
  *    Test program to do matrix multiplication on large arrays.
  *
- *    Intended to stress virtual memory system. Should return 7920200 if Dim==200
+ *    Intended to stress virtual memory system. Should return 120050 if Dim==50
  */
 
 #include "syscall.h"
 
-#define Dim 	200
+#define Dim 	50
 
 int** A;
 int** B;
@@ -15,17 +15,19 @@ int** C;
 void mallocArrays(int*** out) {
 	int i;
 	*out = (int**) malloc(Dim * sizeof(int*));
+	char* largeMemory = malloc(Dim * Dim * sizeof(int));
 	for(i = 0; i < Dim; i++) {
-		(*out)[i] = (int*) malloc(Dim * sizeof(int));
+		(*out)[i] = (int*) (largeMemory + Dim * i * sizeof(int));
 	}
 }
 
-int
-main()
+int main()
 {
 	mallocArrays(&A);
 	mallocArrays(&B);
 	mallocArrays(&C);
+
+	printf("memory alloc finish...\n");
 
     int i, j, k;
 
@@ -35,6 +37,8 @@ main()
 	     B[i][j] = j;
 	     C[i][j] = 0;
 	}
+
+	printf("matrices initialize finish...\n");
 
     for (i = 0; i < Dim; i++)		/* then multiply them together */
 	for (j = 0; j < Dim; j++)

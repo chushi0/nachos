@@ -190,6 +190,10 @@ public class VMProcess extends UserProcess {
                 replace = i;
                 break;
             }
+            if(!entry.used) {
+                replace = i;
+                break;
+            }
         }
         TranslationEntry entry = pageTable[vpn];
         validMemory(vpn, entry);
@@ -285,18 +289,18 @@ public class VMProcess extends UserProcess {
         int pageSize = hopeSize / Processor.pageSize + 1;
         int startVaddr = pageTable.length * Processor.pageSize;
         TranslationEntry[] newPageTable = new TranslationEntry[pageTable.length + pageSize];
-        if (allocPageMemory(newPageTable, pageTable.length, pageSize)) {
-            System.arraycopy(pageTable, 0, newPageTable, 0, pageTable.length);
-            pageTable = newPageTable;
-            int size = pageSize * Processor.pageSize;
-            buf[0] = (byte) (size & 0xff);
-            buf[1] = (byte) ((size >> 8) & 0xff);
-            buf[2] = (byte) ((size >> 16) & 0xff);
-            buf[3] = (byte) ((size >> 24) & 0xff);
-            writeVirtualMemory(sizeAddr, buf);
-            return startVaddr;
+        System.arraycopy(pageTable, 0, newPageTable, 0, pageTable.length);
+        for (int i = pageTable.length; i < newPageTable.length; i++) {
+            newPageTable[i] = new TranslationEntry(-1, 0, false, false, false, false);
         }
-        return 0;
+        pageTable = newPageTable;
+        int size = pageSize * Processor.pageSize;
+        buf[0] = (byte) (size & 0xff);
+        buf[1] = (byte) ((size >> 8) & 0xff);
+        buf[2] = (byte) ((size >> 16) & 0xff);
+        buf[3] = (byte) ((size >> 24) & 0xff);
+        writeVirtualMemory(sizeAddr, buf);
+        return startVaddr;
     }
 
     // 获取可用的内存物理页
