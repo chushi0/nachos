@@ -190,6 +190,10 @@ public class VMProcess extends UserProcess {
                 replace = i;
                 break;
             }
+            if(!entry.used) {
+                replace = i;
+                break;
+            }
         }
         TranslationEntry entry = pageTable[vpn];
         validMemory(vpn, entry);
