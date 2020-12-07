@@ -12,6 +12,9 @@ import java.util.LinkedList;
  * A kernel that can support multiple demand-paging user processes.
  */
 public class VMKernel extends UserKernel {
+
+    private String vmFileName;
+
     /**
      * Allocate a new VM kernel.
      */
@@ -24,7 +27,8 @@ public class VMKernel extends UserKernel {
      */
     public void initialize(String[] args) {
         super.initialize(args);
-        vmFile = Machine.stubFileSystem().open(".vm", true);
+        vmFileName = "." + Machine.networkLink().getLinkAddress() + ".vm";
+        vmFile = Machine.stubFileSystem().open(vmFileName, true);
     }
 
     /**
@@ -46,7 +50,7 @@ public class VMKernel extends UserKernel {
      */
     public void terminate() {
         vmFile.close();
-        Machine.stubFileSystem().remove(".vm");
+        Machine.stubFileSystem().remove(vmFileName);
         super.terminate();
     }
 
