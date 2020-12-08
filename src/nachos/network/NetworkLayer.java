@@ -13,7 +13,7 @@ public class NetworkLayer extends OpenFile {
     // 超时时间
     private static final int timeoutTime = 10000000;
 
-    private final DataLinkLayer dataLinkLayer;
+    protected final DataLinkLayer dataLinkLayer;
     private State state;
     private boolean canRead;
     private boolean canWrite;
