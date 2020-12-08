@@ -19,6 +19,8 @@ public class DataLinkLayer {
     private static final int cacheSize = 16;
     // 超时时间
     private static final int timeoutTime = 100000;
+    // 重传次数
+    private static final int tryCount = 10;
 
     // 接收缓冲区
     private final DLLPacket[] recvCache = new DLLPacket[cacheSize];
@@ -43,6 +45,10 @@ public class DataLinkLayer {
 
     private boolean resetRequest = false;
     private long lastResetRequestTime = 0;
+    private int resetRequestTryCount = 0;
+
+    // 因错误终止
+    private boolean terminate;
 
     /**
      * 当底层接收到一个数据包时，将调用此方法，进行数据链路层解包
@@ -50,6 +56,7 @@ public class DataLinkLayer {
      * @param data 数据包
      */
     public void receivePacket(byte[] data) {
+        if (terminate) return;
         Lib.assertTrue(data.length == Packet.maxContentsLength);
         DLLPacket packet = new DLLPacket();
         packet.packetType = DLLPacket.Type.getFromFlag(data[0]);
@@ -138,6 +145,7 @@ public class DataLinkLayer {
             case RESETOK: {
                 if (resetRequest) {
                     resetRequest = false;
+                    resetRequestTryCount = 0;
                     sendStart = 0;
                     sendEnd = 0;
                 }
@@ -156,6 +164,7 @@ public class DataLinkLayer {
                 if (resetRequest) {
                     sendPackets.add(buildCtrlPacket(DLLPacket.Type.RESET, 0));
                     lastResetRequestTime = Machine.timer().getTime();
+                    resetRequestTryCount = 0;
                 }
                 break;
             }
@@ -169,6 +178,7 @@ public class DataLinkLayer {
      * @return 下一个要发送的数据包
      */
     public byte[] nextSendPacket() {
+        if (terminate) return null;
         // 从要发送的数据包队列中获取
         DLLPacket packet = (DLLPacket) sendPackets.removeFirstOrNull();
         if (packet != null) {
@@ -179,6 +189,11 @@ public class DataLinkLayer {
             for (int i = sendStart; i < sendEnd; i++) {
                 if (sendCache[i % cacheSize] != null && sendCache[i % cacheSize].sendTime + timeoutTime < Machine.timer().getTime()) {
                     sendCache[i % cacheSize].sendTime = Machine.timer().getTime();
+                    sendCache[i % cacheSize].resendCount++;
+                    if (sendCache[i % cacheSize].resendCount > tryCount) {
+                        terminate = true;
+                        return null;
+                    }
                     return sendCache[i % cacheSize].toBytes();
                 }
             }
@@ -205,6 +220,11 @@ public class DataLinkLayer {
         }
         // 重置超时
         if (resetRequest && lastResetRequestTime + timeoutTime < Machine.timer().getTime()) {
+            resetRequestTryCount++;
+            if (resetRequestTryCount > tryCount) {
+                terminate = true;
+                return null;
+            }
             return buildCtrlPacket(DLLPacket.Type.RESET, 0).toBytes();
         }
         return null;
@@ -230,8 +250,13 @@ public class DataLinkLayer {
      * @param data 数据
      */
     public void sendPacket(byte[] data) {
+        if (terminate) return;
         Lib.assertTrue(data.length == maxContentsLength);
         userSendPackets.add(data);
+    }
+
+    public boolean isTerminate() {
+        return terminate;
     }
 
     private DLLPacket buildCtrlPacket(DLLPacket.Type type, int number) {
@@ -284,6 +309,8 @@ public class DataLinkLayer {
 
         // 发送时的时钟时间
         long sendTime;
+        // 重传次数
+        int resendCount;
 
         byte[] toBytes() {
             byte[] data = new byte[maxContentsLength + 2];
