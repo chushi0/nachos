@@ -80,6 +80,12 @@ public class NetworkService {
                     NetworkLayer networkLayer = entry.getValue();
 
                     networkLayer.updateLogic();
+                    if (networkLayer.isClose()) {
+                        hashtableLock.acquire();
+                        remoteNetworkLayerHashtable.remove(remoteLink, networkLayer);
+                        hashtableLock.release();
+                        continue;
+                    }
                     byte[] data;
                     while ((data = networkLayer.dataLinkLayer.nextSendPacket()) != null) {
                         Packet packet = new Packet(remoteLink.remotePort, remoteLink.localPort, data);
