@@ -3,7 +3,13 @@ package nachos.network;
 import nachos.machine.Packet;
 import nachos.threads.KThread;
 
+/**
+ * 网络层
+ * 模拟 TCP 协议（与真实 TCP 协议相似）
+ */
 public class TCPServer {
+    private static final int maxContentLength = DataLinkLayer.maxContentsLength - 2;
+
     public TCPServer() {
         new KThread(new Runnable() {
             @Override
@@ -26,7 +32,7 @@ public class TCPServer {
     /**
      * TCP 协议所使用的数据包
      */
-    protected static class TCPPacket {
+    static class TCPPacket {
         /**
          * 数据包类型
          * <p>
@@ -34,7 +40,7 @@ public class TCPServer {
          * 挥手：FIN、ACK、FIN、ACK
          * 数据：DAT
          */
-        protected enum Type {
+        enum Type {
             DAT(0),
             SYN(0x10),
             ACK(0x20),
@@ -57,13 +63,9 @@ public class TCPServer {
             }
         }
 
-        protected Type type;
-        protected byte[] data;
-
-        protected TCPPacket() {
-            type = Type.DAT;
-            data = new byte[Packet.maxContentsLength];
-
-        }
+        Type type;
+        // 填充数量
+        byte fillCount;
+        byte[] data = new byte[maxContentLength];
     }
 }
