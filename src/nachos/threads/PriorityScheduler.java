@@ -266,7 +266,7 @@ public class PriorityScheduler extends Scheduler {
             }
         }
 
-        private void changeEffectPriority(int priority) {
+        protected void changeEffectPriority(int priority) {
             this.effectPriority = priority;
             if (waitQueue != null) {//若队列里的有效优先级改变，则会改变当前线程的有效优先级
                 waitQueue.changePriority();
@@ -284,7 +284,7 @@ public class PriorityScheduler extends Scheduler {
          *                  now waiting on.
          * @see ThreadQueue#waitForAccess
          */
-        public void waitForAccess(PriorityQueue waitQueue) {
+        protected void waitForAccess(PriorityQueue waitQueue) {
             // implement me
             this.waitQueue = waitQueue;
         }
@@ -299,7 +299,7 @@ public class PriorityScheduler extends Scheduler {
          * @see ThreadQueue#acquire
          * @see ThreadQueue#nextThread
          */
-        public void acquire(PriorityQueue waitQueue) {
+        protected void acquire(PriorityQueue waitQueue) {
             // implement me
             Lib.assertTrue(this.waitQueue == null || waitQueue == this.waitQueue);
             //当前线程移除等待队列
@@ -325,7 +325,7 @@ public class PriorityScheduler extends Scheduler {
          * 2、等待队列中的线程优先级改变(提高)的时候调用
          * 3、调用nextThread方法，当前线程的有效优先级有可能会改变
          */
-        private void recomputeEffectPriority() {
+        protected void recomputeEffectPriority() {
             int max = this.priority;
             for (Map.Entry<PriorityQueue, Integer> entry : effectPriorities.entrySet()) {
                 if (entry.getValue() > max) {
@@ -346,7 +346,7 @@ public class PriorityScheduler extends Scheduler {
          */
         protected int priority;
 
-        private int effectPriority;
+        protected int effectPriority;
         private final HashMap<PriorityQueue, Integer> effectPriorities = new HashMap<>();
         private PriorityQueue waitQueue;
     }
