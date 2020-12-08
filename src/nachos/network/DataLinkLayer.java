@@ -13,12 +13,12 @@ import nachos.threads.SynchList;
 public class DataLinkLayer {
 
     // 数据链路层数据包有效负荷内容大小
-    public static final int maxContentsLength = Packet.maxContentsLength - 2;
+    public static final int maxContentsLength = Packet.maxContentsLength - 2 - 2;
 
     // 双指针缓冲区
     private static final int cacheSize = 16;
     // 超时时间
-    private static final int timeoutTime = 100000;
+    private static final int timeoutTime = 10000000;
     // 重传次数
     private static final int tryCount = 10;
 
@@ -57,7 +57,7 @@ public class DataLinkLayer {
      */
     public void receivePacket(byte[] data) {
         if (terminate) return;
-        Lib.assertTrue(data.length == Packet.maxContentsLength);
+        Lib.assertTrue(data.length == Packet.maxContentsLength - 2);
         DLLPacket packet = new DLLPacket();
         packet.packetType = DLLPacket.Type.getFromFlag(data[0]);
         if (packet.packetType == null) {
@@ -241,7 +241,7 @@ public class DataLinkLayer {
         if (packet == null) {
             return null;
         }
-        return packet.toBytes();
+        return packet.content;
     }
 
     /**

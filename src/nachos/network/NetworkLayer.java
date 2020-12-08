@@ -1,5 +1,6 @@
 package nachos.network;
 
+import nachos.machine.Lib;
 import nachos.machine.Machine;
 import nachos.machine.OpenFile;
 import nachos.threads.SynchList;
@@ -11,7 +12,7 @@ public class NetworkLayer extends OpenFile {
     private static final int maxContentsLength = DataLinkLayer.maxContentsLength - 2;
 
     // 超时时间
-    private static final int timeoutTime = 10000000;
+    private static final int timeoutTime = 1000000000;
 
     protected final DataLinkLayer dataLinkLayer;
     private State state;
@@ -28,8 +29,8 @@ public class NetworkLayer extends OpenFile {
     public NetworkLayer(DataLinkLayer dataLinkLayer) {
         this.dataLinkLayer = dataLinkLayer;
         this.state = State.INIT;
-        canRead = false;
-        canWrite = false;
+        canRead = true;
+        canWrite = true;
 
         readBuffer = new SynchList();
     }
@@ -52,6 +53,7 @@ public class NetworkLayer extends OpenFile {
         if (state == State.CLOSE) return;
         byte[] data;
         while ((data = dataLinkLayer.nextRecvPacket()) != null) {
+            Lib.assertTrue(data.length == DataLinkLayer.maxContentsLength);
             NLPacket packet = new NLPacket();
             packet.type = NLPacket.Type.getByFlag(data[0]);
             packet.fillCount = data[1];
@@ -124,6 +126,9 @@ public class NetworkLayer extends OpenFile {
             System.arraycopy(currentRead.data, currentReadOffset, buf, offset + readCount, c);
             currentReadOffset += c;
             readCount += c;
+        }
+        if (readCount == 0 && (!canRead || isClose())) {
+            return -1;
         }
         return readCount;
     }

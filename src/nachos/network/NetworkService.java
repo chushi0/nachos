@@ -1,11 +1,9 @@
 package nachos.network;
 
-import nachos.machine.Lib;
-import nachos.machine.Machine;
-import nachos.machine.MalformedPacketException;
-import nachos.machine.Packet;
+import nachos.machine.*;
 import nachos.threads.*;
 
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.Map;
@@ -67,11 +65,12 @@ public class NetworkService {
         try {
             //noinspection InfiniteLoopStatement
             while (true) {
-                ThreadedKernel.alarm.waitUntil(500);
+                ThreadedKernel.alarm.waitUntil(50);
 
                 Hashtable<RemoteLink, NetworkLayer> cloneHashtable;
 
                 hashtableLock.acquire();
+                //noinspection unchecked
                 cloneHashtable = (Hashtable<RemoteLink, NetworkLayer>) remoteNetworkLayerHashtable.clone();
                 hashtableLock.release();
 
@@ -86,9 +85,13 @@ public class NetworkService {
                         hashtableLock.release();
                         continue;
                     }
+                    byte[] sendData = new byte[Packet.maxContentsLength];
                     byte[] data;
                     while ((data = networkLayer.dataLinkLayer.nextSendPacket()) != null) {
-                        Packet packet = new Packet(remoteLink.remotePort, remoteLink.localPort, data);
+                        sendData[0] = (byte) remoteLink.localPort;
+                        sendData[1] = (byte) remoteLink.remotePort;
+                        System.arraycopy(data, 0, sendData, 2, data.length);
+                        Packet packet = new Packet(remoteLink.remoteAddress, Machine.networkLink().getLinkAddress(), sendData);
                         Machine.networkLink().send(packet);
                         messageSend.P();
                     }
@@ -104,14 +107,17 @@ public class NetworkService {
         while (true) {
             messageReceive.P();
             Packet packet = Machine.networkLink().receive();
-            int remoteAddress = packet.packetBytes[0];
-            int remotePort = packet.srcLink;
-            int localPort = packet.dstLink;
+            int remoteAddress = packet.srcLink;
+            byte[] content = packet.contents;
+            int remotePort = content[0];
+            int localPort = content[1];
+            byte[] data = new byte[Packet.maxContentsLength - 2];
+            System.arraycopy(content, 2, data, 0, data.length);
             RemoteLink remoteLink = new RemoteLink(remoteAddress, remotePort, localPort);
             hashtableLock.acquire();
             if (remoteNetworkLayerHashtable.containsKey(remoteLink)) {
                 NetworkLayer networkLayer = remoteNetworkLayerHashtable.get(remoteLink);
-                networkLayer.dataLinkLayer.receivePacket(packet.contents);
+                networkLayer.dataLinkLayer.receivePacket(data);
             } else {
                 portListenLock.acquire();
                 if (portListening[localPort]) {
@@ -120,7 +126,7 @@ public class NetworkService {
                     }
                     DataLinkLayer dataLinkLayer = new DataLinkLayer();
                     NetworkLayer networkLayer = new NetworkLayer(dataLinkLayer);
-                    dataLinkLayer.receivePacket(packet.contents);
+                    dataLinkLayer.receivePacket(data);
                     remoteNetworkLayerHashtable.put(remoteLink, networkLayer);
                     portListening[localPort] = false;
                     connection = networkLayer;
@@ -189,6 +195,57 @@ public class NetworkService {
 
     private void receiveInterrupt() {
         messageReceive.V();
+    }
+
+    public void selfTest() {
+        new KThread(new TestServer()).fork();
+        new TestClient().run();
+    }
+
+    private class TestClient implements Runnable {
+        @Override
+        public void run() {
+            OpenFile file = connect(Machine.networkLink().getLinkAddress(), 100);
+            byte[] buf = {2, 17, 91};
+            System.out.println("send: " + Arrays.toString(buf));
+            file.write(buf, 0, buf.length);
+            buf = new byte[buf.length];
+            int readCount = 0;
+            while (readCount < buf.length) {
+                KThread.yield();
+                int c = file.read(buf, readCount, buf.length - readCount);
+                if (c == -1) {
+                    System.out.println("error occurred");
+                    break;
+                }
+                readCount += c;
+            }
+            System.out.println("readCount: " + readCount);
+            System.out.println("read: " + Arrays.toString(buf));
+            file.close();
+        }
+    }
+
+    private class TestServer implements Runnable {
+
+        @Override
+        public void run() {
+            while (true) {
+                OpenFile file = accept(100);
+                while (true) {
+                    KThread.yield();
+                    byte[] buf = new byte[1];
+                    int resp = file.read(buf, 0, 1);
+                    if (resp == -1) break;
+                    if (resp == 0) continue;
+                    System.out.println("server read: " + buf[0]);
+                    buf[0]++;
+                    System.out.println("server send: " + buf[0]);
+                    Lib.assertTrue(file.write(buf, 0, 1) == 1);
+                }
+                file.close();
+            }
+        }
     }
 
     private static final class RemoteLink {

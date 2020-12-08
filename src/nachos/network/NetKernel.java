@@ -6,6 +6,8 @@ import nachos.userprog.*;
 import nachos.vm.*;
 import nachos.network.*;
 
+import java.io.IOException;
+
 /**
  * A kernel with network support.
  */
@@ -23,7 +25,8 @@ public class NetKernel extends VMKernel {
     public void initialize(String[] args) {
         super.initialize(args);
 
-        postOffice = new PostOffice();
+        networkService = new NetworkService();
+        networkService.initialize();
     }
 
     /**
@@ -34,52 +37,9 @@ public class NetKernel extends VMKernel {
      */
     public void selfTest() {
         super.selfTest();
-    }
 
-    private void ping(int dstLink) {
-        int srcLink = Machine.networkLink().getLinkAddress();
-
-        System.out.println("PING " + dstLink + " from " + srcLink);
-
-        long startTime = Machine.timer().getTime();
-
-        MailMessage ping;
-
-        try {
-            ping = new MailMessage(dstLink, 1,
-                    Machine.networkLink().getLinkAddress(), 0,
-                    new byte[0]);
-        } catch (MalformedPacketException e) {
-            Lib.assertNotReached();
-            return;
-        }
-
-        postOffice.send(ping);
-
-        MailMessage ack = postOffice.receive(0);
-
-        long endTime = Machine.timer().getTime();
-
-        System.out.println("time=" + (endTime - startTime) + " ticks");
-    }
-
-    private void pingServer() {
-        while (true) {
-            MailMessage ping = postOffice.receive(1);
-
-            MailMessage ack;
-
-            try {
-                ack = new MailMessage(ping.packet.srcLink, ping.srcPort,
-                        ping.packet.dstLink, ping.dstPort,
-                        ping.contents);
-            } catch (MalformedPacketException e) {
-                // should never happen...
-                continue;
-            }
-
-            postOffice.send(ack);
-        }
+        System.out.println("==== network test ====");
+        networkService.selfTest();
     }
 
     /**
@@ -96,7 +56,7 @@ public class NetKernel extends VMKernel {
         super.terminate();
     }
 
-    private PostOffice postOffice;
+    private NetworkService networkService;
 
     // dummy variables to make javac smarter
     private static NetProcess dummy1 = null;
