@@ -433,7 +433,7 @@ public class UserProcess {
      * Handle the halt() system call.
      */
     private int handleHalt() {
-        if (id != 0) {
+        if (id != 1) {
 //            System.err.println("Process which called halt() is not root process");
             return -1;
         }
