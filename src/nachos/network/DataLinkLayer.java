@@ -65,7 +65,7 @@ public class DataLinkLayer {
             System.err.println("unknown packet type");
             return;
         }
-        packet.packetNumber = data[1];
+        packet.packetNumber = data[1] & 0xff;
         System.arraycopy(data, 2, packet.content, 0, maxContentsLength);
         switch (packet.packetType) {
             case DAT: {
