@@ -650,7 +650,7 @@ public class UserProcess {
     }
 
     // 获取下一个可用的保存已打开文件的位置
-    private int nextOpenFileIndex() {
+    protected int nextOpenFileIndex() {
         for (int i = 0; i < openFiles.length; i++) {
             if (openFiles[i] == null) {
                 return i;
@@ -714,7 +714,7 @@ public class UserProcess {
     private int argc, argv;
 
     // 打开文件列表
-    private final OpenFile[] openFiles = new OpenFile[16];
+    protected final OpenFile[] openFiles = new OpenFile[16];
 
     // 父进程
     private UserProcess parentProcess;

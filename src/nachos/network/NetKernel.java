@@ -38,8 +38,8 @@ public class NetKernel extends VMKernel {
     public void selfTest() {
         super.selfTest();
 
-        System.out.println("==== network test ====");
-        networkService.selfTest();
+//        System.out.println("==== network test ====");
+//        networkService.selfTest();
     }
 
     /**
@@ -56,7 +56,7 @@ public class NetKernel extends VMKernel {
         super.terminate();
     }
 
-    private NetworkService networkService;
+    public static NetworkService networkService;
 
     // dummy variables to make javac smarter
     private static NetProcess dummy1 = null;
