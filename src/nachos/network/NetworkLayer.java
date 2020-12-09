@@ -12,7 +12,7 @@ public class NetworkLayer extends OpenFile {
     private static final int maxContentsLength = DataLinkLayer.maxContentsLength - 2;
 
     // 超时时间
-    private static final int timeoutTime = 1000000000;
+    private static final int timeoutTime = 100000;
 
     protected final DataLinkLayer dataLinkLayer;
     private State state;
@@ -22,6 +22,8 @@ public class NetworkLayer extends OpenFile {
     private final SynchList readBuffer;
     private NLPacket currentRead;
     private int currentReadOffset;
+
+    private final SynchList writeList;
 
     private boolean finalize;
     private long finalizeTime;
@@ -33,6 +35,7 @@ public class NetworkLayer extends OpenFile {
         canWrite = true;
 
         readBuffer = new SynchList();
+        writeList = new SynchList();
     }
 
     /**
@@ -100,6 +103,12 @@ public class NetworkLayer extends OpenFile {
         if ((finalize && Machine.timer().getTime() > finalizeTime) || dataLinkLayer.isTerminate()) {
             state = State.CLOSE;
         }
+        if (state == State.RUN) {
+            byte[] bytes;
+            while ((bytes = (byte[]) writeList.removeFirstOrNull()) != null) {
+                dataLinkLayer.sendPacket(bytes);
+            }
+        }
     }
 
     /**
@@ -143,7 +152,7 @@ public class NetworkLayer extends OpenFile {
             packet.type = NLPacket.Type.DAT;
             packet.fillCount = (byte) Math.min(length, maxContentsLength);
             System.arraycopy(buf, offset, packet.data, 0, packet.fillCount);
-            dataLinkLayer.sendPacket(packet.toBytes());
+            writeList.add(packet.toBytes());
             offset += packet.fillCount;
             length -= packet.fillCount;
         }

@@ -3,10 +3,7 @@ package nachos.network;
 import nachos.machine.*;
 import nachos.threads.*;
 
-import java.util.Arrays;
-import java.util.Hashtable;
-import java.util.LinkedList;
-import java.util.Map;
+import java.util.*;
 
 public class NetworkService {
     // 最大端口号
@@ -206,22 +203,35 @@ public class NetworkService {
         @Override
         public void run() {
             OpenFile file = connect(Machine.networkLink().getLinkAddress(), 100);
-            byte[] buf = {2, 17, 91};
+            byte[] buf = new byte[32 * 512];
+            byte[] tran = new byte[buf.length];
+            new Random().nextBytes(buf);
             System.out.println("send: " + Arrays.toString(buf));
             file.write(buf, 0, buf.length);
-            buf = new byte[buf.length];
             int readCount = 0;
-            while (readCount < buf.length) {
+            long lastTime = System.currentTimeMillis();
+            while (readCount < tran.length) {
                 KThread.yield();
-                int c = file.read(buf, readCount, buf.length - readCount);
+                int c = file.read(tran, readCount, tran.length - readCount);
                 if (c == -1) {
                     System.out.println("error occurred");
                     break;
                 }
                 readCount += c;
+                if (System.currentTimeMillis() - lastTime > 1000) {
+                    System.out.println(readCount + "/" + buf.length);
+                    lastTime = System.currentTimeMillis();
+                }
             }
             System.out.println("readCount: " + readCount);
-            System.out.println("read: " + Arrays.toString(buf));
+            System.out.println("read: " + Arrays.toString(tran));
+            for (int i = 0; i < buf.length; i++) {
+                if ((byte) (buf[i] + 1) != tran[i]) {
+                    System.out.println("tran error");
+                    break;
+                }
+            }
+            System.out.println("finish");
             file.close();
         }
     }
@@ -238,9 +248,7 @@ public class NetworkService {
                     int resp = file.read(buf, 0, 1);
                     if (resp == -1) break;
                     if (resp == 0) continue;
-                    System.out.println("server read: " + buf[0]);
                     buf[0]++;
-                    System.out.println("server send: " + buf[0]);
                     Lib.assertTrue(file.write(buf, 0, 1) == 1);
                 }
                 file.close();

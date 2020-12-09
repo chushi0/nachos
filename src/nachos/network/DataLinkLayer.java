@@ -18,7 +18,7 @@ public class DataLinkLayer {
     // 双指针缓冲区
     private static final int cacheSize = 16;
     // 超时时间
-    private static final int timeoutTime = 10000000;
+    private static final int timeoutTime = 5000;
     // 重传次数
     private static final int tryCount = 10;
 
@@ -71,7 +71,7 @@ public class DataLinkLayer {
             case DAT: {
                 // 如果已经接收到了，则向另一方发送收到消息
                 if (recvStart > packet.packetNumber) {
-                    sendPackets.add(buildCtrlPacket(DLLPacket.Type.REJ, recvStart));
+                    sendPackets.add(buildCtrlPacket(DLLPacket.Type.RR, packet.packetNumber));
                     break;
                 }
                 // 如果缓冲区为空，并且这个数据包是接下来要接收的，则回复收到
@@ -225,6 +225,7 @@ public class DataLinkLayer {
                 terminate = true;
                 return null;
             }
+            lastResetRequestTime = Machine.timer().getTime();
             return buildCtrlPacket(DLLPacket.Type.RESET, 0).toBytes();
         }
         return null;
