@@ -58,18 +58,25 @@ public class LotteryScheduler extends PriorityScheduler {
         }
 
         @Override
+        public void waitForAccess(KThread thread) {
+            Lib.assertTrue(Machine.interrupt().disabled());
+            ThreadState threadState = getThreadState(thread);
+            threadState.waitForAccess(this);
+            threadList.add(threadState);
+            if (transferPriority) {
+                int totalPriority = 0;
+                //计算彩票总和
+                for (ThreadState state : threadList) {
+                    totalPriority += state.getEffectivePriority();
+                }
+                acquireThread.transferPriority(this, totalPriority);
+            }
+        }
+
+        @Override
         public LotteryState pickNextThread() {
             // implement me
             int totalPriority = 0;
-            //排序
-            for (int i = 0; i < threadList.size(); i++) {
-                for (int j = threadList.size() - 1; j > i; j--) {
-                    if (threadList.get(j - 1).getEffectivePriority() > threadList.get(j).getEffectivePriority()) {
-                        ThreadState temp = threadList.remove(j);
-                        threadList.add(j - 1, temp);
-                    }
-                }
-            }
             //临界数组
             List<Integer> array = new LinkedList<>();
             int sum = 0;
@@ -104,7 +111,6 @@ public class LotteryScheduler extends PriorityScheduler {
             for (ThreadState threadState : threadList) {
                 totalPriority += threadState.getEffectivePriority();
             }
-            totalPriority += acquireThread.getEffectivePriority();
             acquireThread.transferPriority(this, totalPriority);
         }
     }
@@ -124,11 +130,10 @@ public class LotteryScheduler extends PriorityScheduler {
 
         @Override
         protected void recomputeEffectPriority() {
-            int totalPriority = 0;
+            int totalPriority = this.priority;
             for (Map.Entry<PriorityQueue, Integer> entry : effectPriorities.entrySet()) {
                 totalPriority += entry.getValue();
             }
-            totalPriority += getEffectivePriority();
             if (totalPriority != effectPriority) {
                 changeEffectPriority(totalPriority);
             }
