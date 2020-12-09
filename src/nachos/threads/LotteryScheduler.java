@@ -57,84 +57,56 @@ public class LotteryScheduler extends PriorityScheduler {
             super(transferPriority);
         }
 
-        public void waitForAccess(KThread thread) {
-            Lib.assertTrue(Machine.interrupt().disabled());
-            LotteryState threadState = getThreadState(thread);
-            threadState.waitForAccess(this);
-            threadList.add(threadState);
-            if (transferPriority) {
-                acquireThread.transferPriority(this, threadState.getEffectivePriority());
-            }
-        }
-
-        public void acquire(KThread thread) {
-            Lib.assertTrue(Machine.interrupt().disabled());
-            LotteryState threadState = getThreadState(thread);
-            threadState.acquire(this);
-            acquireThread = threadState;
-        }
-
-        public KThread nextThread() {
-            Lib.assertTrue(Machine.interrupt().disabled());
-            // implement me
-            if (acquireThread != null) {//当前线程退出，重置有效优先级
-                acquireThread.exit(this);
-            }
-            LotteryState threadState = pickNextThread();
-            acquireThread = threadState;
-            threadList.remove(threadState);
-            if (threadState == null) return null;
-            threadState.acquire(this);
-            return threadState.thread;
-        }
-
         @Override
         public LotteryState pickNextThread() {
             // implement me
             int totalPriority = 0;
             //排序
-//            threadList.sort(Comparator.comparing(LotteryState::getPriority));
             for (int i = 0; i < threadList.size(); i++) {
-                for (int j = i; j < threadList.size() - 1; j++) {
-                    if (threadList.get(j).getEffectivePriority() > threadList.get(j + 1).getEffectivePriority()) {
-                        LotteryState temp = threadList.remove(j + 1);
-                        threadList.add(j, temp);
+                for (int j = threadList.size() - 1; j > i; j--) {
+                    if (threadList.get(j - 1).getEffectivePriority() > threadList.get(j).getEffectivePriority()) {
+                        ThreadState temp = threadList.remove(j);
+                        threadList.add(j - 1, temp);
                     }
                 }
             }
+            //临界数组
+            List<Integer> array = new LinkedList<>();
+            int sum = 0;
+            array.add(sum);
+            for (ThreadState lotteryState : threadList) {
+                sum += lotteryState.getEffectivePriority();
+                array.add(sum);
+            }
             //计算彩票总和
-            for (LotteryState threadState : threadList) {
+            for (ThreadState threadState : threadList) {
                 totalPriority += threadState.getEffectivePriority();
             }
             int rand = Lib.random(totalPriority + 1);//from 1 to totalPriority
             int index = 0;
-            for (int i = threadList.size() - 1; i > 0; i--) {
-                if (rand >= threadList.get(i).getEffectivePriority()) {
+            for (int i = array.size() - 1; i > 0; i--) {
+                if (rand > array.get(i)) {
                     index = i;
                     break;
                 }
             }
+
             if (threadList.size() == 0) return null;
-            else return threadList.get(index);
+            else return (LotteryState) threadList.get(index);
         }
 
         //根据等待线程的有效优先级更改当前线程的有效优先级
         @Override
         protected void changePriority() {
             if (!transferPriority) return;
-            int totalPriority = priorityMinimum - 1;
+            int totalPriority = 0;
             //计算彩票总和
-            for (LotteryState threadState : threadList) {
+            for (ThreadState threadState : threadList) {
                 totalPriority += threadState.getEffectivePriority();
             }
+            totalPriority += acquireThread.getEffectivePriority();
             acquireThread.transferPriority(this, totalPriority);
         }
-
-
-        // 等待线程列表
-        private final LinkedList<LotteryState> threadList = new LinkedList<>();
-        // 持有锁的线程
-        private LotteryState acquireThread;
     }
 
     protected class LotteryState extends ThreadState {
@@ -150,23 +122,17 @@ public class LotteryScheduler extends PriorityScheduler {
         }
 
 
-        protected void transferPriority(LotteryQueue waitQueue, int priority) {
-            effectPriorities.put(waitQueue, priority);
-            recomputeEffectPriority();
-        }
-
         @Override
         protected void recomputeEffectPriority() {
             int totalPriority = 0;
-            for (Map.Entry<LotteryQueue, Integer> entry : effectPriorities.entrySet()) {
+            for (Map.Entry<PriorityQueue, Integer> entry : effectPriorities.entrySet()) {
                 totalPriority += entry.getValue();
             }
+            totalPriority += getEffectivePriority();
             if (totalPriority != effectPriority) {
                 changeEffectPriority(totalPriority);
             }
         }
 
-        private final HashMap<LotteryQueue, Integer> effectPriorities = new HashMap<>();
-        private LotteryQueue waitQueue;
     }
 }

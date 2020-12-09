@@ -205,9 +205,9 @@ public class PriorityScheduler extends Scheduler {
         public boolean transferPriority;
 
         // 等待线程列表
-        private final LinkedList<ThreadState> threadList = new LinkedList<>();
+        protected final LinkedList<ThreadState> threadList = new LinkedList<>();
         // 持有锁的线程
-        private ThreadState acquireThread;
+        protected ThreadState acquireThread;
     }
 
     /**
@@ -347,7 +347,7 @@ public class PriorityScheduler extends Scheduler {
         protected int priority;
 
         protected int effectPriority;
-        private final HashMap<PriorityQueue, Integer> effectPriorities = new HashMap<>();
-        private PriorityQueue waitQueue;
+        protected final HashMap<PriorityQueue, Integer> effectPriorities = new HashMap<>();
+        protected PriorityQueue waitQueue;
     }
 }
