@@ -208,6 +208,7 @@ public class NetworkService {
             new Random().nextBytes(buf);
             System.out.println("send: " + Arrays.toString(buf));
             file.write(buf, 0, buf.length);
+            file.close();
             int readCount = 0;
             long lastTime = System.currentTimeMillis();
             while (readCount < tran.length) {
@@ -232,7 +233,6 @@ public class NetworkService {
                 }
             }
             System.out.println("finish");
-            file.close();
         }
     }
 
@@ -242,6 +242,7 @@ public class NetworkService {
         public void run() {
             while (true) {
                 OpenFile file = accept(100);
+                int c = 0;
                 while (true) {
                     KThread.yield();
                     byte[] buf = new byte[1];
@@ -249,8 +250,10 @@ public class NetworkService {
                     if (resp == -1) break;
                     if (resp == 0) continue;
                     buf[0]++;
+                    c++;
                     Lib.assertTrue(file.write(buf, 0, 1) == 1);
                 }
+                System.out.println("exit: " + c);
                 file.close();
             }
         }

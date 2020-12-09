@@ -93,10 +93,6 @@ public class NetworkLayer extends OpenFile {
                 case FIN: {
                     // 对端不再发送数据
                     canRead = false;
-                    if (!canWrite) {
-                        finalize = true;
-                        finalizeTime = Machine.timer().getTime() + timeoutTime;
-                    }
                 }
             }
         }
@@ -108,6 +104,10 @@ public class NetworkLayer extends OpenFile {
             while ((bytes = (byte[]) writeList.removeFirstOrNull()) != null) {
                 dataLinkLayer.sendPacket(bytes);
             }
+        }
+        if(!canRead && !canWrite && state == State.RUN) {
+            finalize = true;
+            finalizeTime = Machine.timer().getTime() + timeoutTime;
         }
     }
 
@@ -163,10 +163,6 @@ public class NetworkLayer extends OpenFile {
     public void close() {
         canWrite = false;
         dataLinkLayer.sendPacket(buildNLPacket(NLPacket.Type.FIN).toBytes());
-        if (!canRead) {
-            finalize = true;
-            finalizeTime = Machine.timer().getTime() + timeoutTime;
-        }
     }
 
     private NLPacket buildNLPacket(NLPacket.Type type) {
