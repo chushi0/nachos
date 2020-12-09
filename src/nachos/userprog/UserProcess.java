@@ -553,6 +553,7 @@ public class UserProcess {
             childProcessHashMap.put(userProcess.id, userProcess);
             return userProcess.id;
         } else {
+            userProcessHashMap.remove(userProcess.id);
             return -1;
         }
     }
